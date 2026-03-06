@@ -385,6 +385,31 @@ const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse
     return;
   }
 
+  // MCP endpoint at /mcp — same handler, Anthropic API client hits this path
+  if (url === "/mcp" && req.method === "POST") {
+    const reqServer = createRequestServer();
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: undefined as any,
+    });
+    await reqServer.connect(transport);
+    await transport.handleRequest(req, res);
+    return;
+  }
+
+  // HEAD /mcp for protocol version check
+  if (url === "/mcp" && req.method === "HEAD") {
+    res.writeHead(200, { "MCP-Protocol-Version": "2025-06-18" });
+    res.end();
+    return;
+  }
+
+  // DELETE /mcp for session cleanup
+  if (url === "/mcp" && req.method === "DELETE") {
+    res.writeHead(200);
+    res.end();
+    return;
+  }
+
   if (url === "/" && req.method === "DELETE") {
     res.writeHead(200);
     res.end();
