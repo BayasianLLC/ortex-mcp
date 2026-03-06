@@ -84,7 +84,7 @@ server.tool(
     page_size: z.number().default(30).describe("Records per page"),
   },
   async ({ ticker, exchange, from_date, to_date, page_size }) => {
-    const data = await ortexGet(`/api/v1/${exchange}/${ticker}/ctb/all`, {
+    const data = await ortexGet(`/api/v1/stock/${exchange}/${ticker}/ctb/all`, {
       ...(from_date && { from_date }),
       ...(to_date && { to_date }),
       page_size,
@@ -113,7 +113,7 @@ server.tool(
     page_size: z.number().default(30).describe("Records per page"),
   },
   async ({ ticker, exchange, from_date, to_date, page_size }) => {
-    const data = await ortexGet(`/api/v1/${exchange}/${ticker}/availability`, {
+    const data = await ortexGet(`/api/v1/stock/${exchange}/${ticker}/availability`, {
       ...(from_date && { from_date }),
       ...(to_date && { to_date }),
       page_size,
