@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import express, { Request, Response } from "express";
+import { createServer, IncomingMessage, ServerResponse } from "http";
 import { z } from "zod";
 
 // ─────────────────────────────────────────────
@@ -34,12 +34,9 @@ async function ortexGet(path: string, params: Record<string, string | number | b
 }
 
 // ─────────────────────────────────────────────
-// MCP SERVER
+// MCP TOOLS — registered per-request (stateless)
 // ─────────────────────────────────────────────
-const server = new McpServer({
-  name: "ORTEX-MCP",
-  version: "1.0.0",
-});
+function registerTools(server: McpServer): void {
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // TOOL 1: SHORT INTEREST (daily time series)
@@ -338,36 +335,68 @@ server.tool(
   }
 );
 
-// ─────────────────────────────────────────────
-// EXPRESS + STREAMABLE HTTP TRANSPORT
-// Same pattern as Quiver MCP on Railway
-// ─────────────────────────────────────────────
-const app = express();
-app.use(express.json());
+} // end registerTools
 
-// Health check — Railway requires this
-app.get("/health", (_req: Request, res: Response) => {
-  res.json({
-    status: "ok",
-    service: "ORTEX-MCP",
+// ─────────────────────────────────────────────
+// HTTP Server with Stateless Streamable HTTP Transport
+// Same proven pattern as Quiver MCP on Railway
+// ─────────────────────────────────────────────
+
+function createRequestServer(): McpServer {
+  const reqServer = new McpServer({
+    name: "ORTEX-MCP",
     version: "1.0.0",
-    tools: 10,
-    api_key_configured: API_KEY !== "TEST",
   });
+  registerTools(reqServer);
+  return reqServer;
+}
+
+const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
+  const url = req.url || "/";
+
+  // Health check
+  if (url === "/health" || (url === "/" && req.method === "GET")) {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({
+      status: "ok",
+      service: "ORTEX-MCP",
+      version: "1.0.0",
+      tools: 10,
+      api_key_configured: API_KEY !== "TEST",
+    }));
+    return;
+  }
+
+  // MCP protocol version header for HEAD requests
+  if (req.method === "HEAD") {
+    res.writeHead(200, { "MCP-Protocol-Version": "2025-06-18" });
+    res.end();
+    return;
+  }
+
+  // MCP endpoint at root — stateless (new server+transport per request)
+  if (url === "/" && req.method === "POST") {
+    const reqServer = createRequestServer();
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: undefined as any,
+    });
+    await reqServer.connect(transport);
+    await transport.handleRequest(req, res);
+    return;
+  }
+
+  if (url === "/" && req.method === "DELETE") {
+    res.writeHead(200);
+    res.end();
+    return;
+  }
+
+  res.writeHead(404);
+  res.end("Not found");
 });
 
-// MCP endpoint
-app.all("/mcp", async (req: Request, res: Response) => {
-  const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: undefined,
-  });
-  res.on("close", () => transport.close());
-  await server.connect(transport);
-  await transport.handleRequest(req, res, req.body);
-});
-
-app.listen(PORT, () => {
-  console.log(`ORTEX MCP server running on port ${PORT}`);
+httpServer.listen(PORT, "0.0.0.0", () => {
+  console.log(`ORTEX MCP server running on http://0.0.0.0:${PORT}`);
   console.log(`API key: ${API_KEY === "TEST" ? "TEST (trial mode)" : "configured"}`);
   console.log(`Tools: ortex_short_interest, ortex_cost_to_borrow, ortex_short_availability,`);
   console.log(`       ortex_pcr_sentiment, ortex_shares_outstanding, ortex_days_to_cover_index,`);
