@@ -148,7 +148,7 @@ server.tool(
   },
   async ({ ticker, exchange, days_fwd }) => {
     const data = await ortexGet(`/api/v1/${exchange}/${ticker}/options/pcr`, {
-      ...(days_fwd !== undefined && { days_fwd }),
+      ...(days_fwd !== undefined && { days_fwd: String(days_fwd) }),
     });
     return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
   }
