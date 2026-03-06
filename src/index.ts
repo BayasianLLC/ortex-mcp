@@ -26,6 +26,7 @@ async function ortexGet(path: string, params: Record<string, string | number | b
       "Accept": "application/json",
     },
   });
+  console.log('ORTEX URL:', url.toString(), '→', res.status);
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`ORTEX API error ${res.status}: ${text}`);
@@ -147,7 +148,7 @@ server.tool(
     ),
   },
   async ({ ticker, exchange, days_fwd }) => {
-    const data = await ortexGet(`/api/v1/${exchange}/${ticker}/options/pcr`, {
+    const data = await ortexGet(`/api/v1/stock/${exchange}/${ticker}/options/sentiment/pcr`, {
       ...(days_fwd !== undefined && { days_fwd: String(days_fwd) }),
     });
     return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
